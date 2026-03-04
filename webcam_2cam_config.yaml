@@ -1,0 +1,9 @@
+# Forge conversion configuration
+target_format: lerobot-v3
+fps: 20.2
+robot_type: unknown
+cameras:
+  camera_a4ech: camera_a4ech
+  camera_webcam: camera_webcam
+fail_on_error: false
+skip_existing: true
