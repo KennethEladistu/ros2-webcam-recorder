@@ -1,0 +1,5 @@
+bool first_parcel
+bool last_parcel
+bool item_picked_up
+bool od_item_picked_up
+string language_instruction

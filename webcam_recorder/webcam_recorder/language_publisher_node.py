@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from robot_interfaces.msg import LanguageInstruction
+from kenneth_interfaces.msg import LanguageInstruction
 
 class LanguagePublisherNode(Node):
     def __init__(self):

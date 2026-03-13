@@ -1,0 +1,14 @@
+int32[] ocr_spatial_data
+int32[] od_spatial_data
+int32[] od_rectangle_coords
+string od_all_coords
+string od_all_labels
+sensor_msgs/Image ocr_image
+sensor_msgs/Image dark_ocr_image
+sensor_msgs/Image rotated_ocr_image
+sensor_msgs/Image od_image
+sensor_msgs/Image rotated_od_image
+sensor_msgs/Image dino_image
+bool ocr_valid
+bool od_valid
+bool move_conveyor

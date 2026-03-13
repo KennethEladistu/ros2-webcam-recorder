@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>robot_interfaces</name>
+  <name>kenneth_interfaces</name>
   <version>0.0.1</version>
   <description>Custom ROS2 interfaces for robot data recording</description>
   <maintainer email="kenneth@example.com">kenneth</maintainer>

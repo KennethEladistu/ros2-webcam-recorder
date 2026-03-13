@@ -1,0 +1,2 @@
+int64 pressure_sensor
+bool push_button_to_start_sequence

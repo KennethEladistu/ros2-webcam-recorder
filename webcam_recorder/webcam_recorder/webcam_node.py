@@ -1,92 +1,95 @@
 #!/usr/bin/env python3
-
 import rclpy
 from rclpy.node import Node
-from robot_interfaces.msg import CameraData
+from kenneth_interfaces.msg import CameraData
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-import cv2
+import threading
+import sys
+sys.path.insert(0, '/home/mailroom/dev_ws/install/my_yolo_pkg/lib/python3.12/site-packages')
+from my_yolo_pkg.submodule.oak_cam import OakDProDevice
 
-class WebcamNode(Node):
+OD_MXID  = '18443010D1AEAC0F00'  # USB
+OCR_MXID = '14442C1051231BD000'  # PoE
+
+class CameraNode(Node):
     def __init__(self):
-        super().__init__('webcam_node')
-
+        super().__init__('camera_node')
         self.br = CvBridge()
 
-        # Camera 1 - A4ech
-        self.cap1 = cv2.VideoCapture(4)
-        # Camera 2 - Web Camera
-        self.cap2 = cv2.VideoCapture(6)
+        # Publishers
+        self.publisher_od  = self.create_publisher(CameraData, '/camera/od/camera_data', 10)
+        self.publisher_ocr = self.create_publisher(CameraData, '/camera/ocr/camera_data', 10)
 
-        # Now publishing CameraData instead of Image
-        self.publisher1 = self.create_publisher(CameraData, '/camera/a4ech/camera_data', 10)
-        self.publisher2 = self.create_publisher(CameraData, '/camera/webcam/camera_data', 10)
+        # Frames
+        self.od_frame  = None
+        self.od_depth  = None
+        self.ocr_frame = None
+        self.od_lock   = threading.Lock()
+        self.ocr_lock  = threading.Lock()
 
+        # Start both cameras in separate threads
+        self.od_thread  = threading.Thread(target=self.od_stream,  daemon=True)
+        self.ocr_thread = threading.Thread(target=self.ocr_stream, daemon=True)
+        self.od_thread.start()
+        self.ocr_thread.start()
+
+        self.get_logger().info('\033[92mCamera Node Starting...\033[0m')
         self.timer = self.create_timer(0.05, self.publish_frames)  # 20fps
 
-        if not self.cap1.isOpened():
-            self.get_logger().error('Could not open A4ech camera!')
-        else:
-            self.get_logger().info('\033[92mA4ech Camera Ready!\033[0m')
+    def od_stream(self):
+        cam = OakDProDevice(mxid=OD_MXID, ocr=False)
+        self.get_logger().info('\033[92mOD Camera Ready!\033[0m')
+        while rclpy.ok():
+            rgb, _, depth = cam.run()
+            with self.od_lock:
+                self.od_frame = rgb
+                self.od_depth = depth
 
-        if not self.cap2.isOpened():
-            self.get_logger().error('Could not open Web Camera!')
-        else:
-            self.get_logger().info('\033[92mWeb Camera Ready!\033[0m')
+    def ocr_stream(self):
+        cam = OakDProDevice(mxid=OCR_MXID, ocr=True)
+        self.get_logger().info('\033[92mOCR Camera Ready!\033[0m')
+        while rclpy.ok():
+            rgb, _, _ = cam.run()
+            with self.ocr_lock:
+                self.ocr_frame = rgb
+
+    def make_camera_data(self, rgb_frame, frame_id, now):
+        msg = CameraData()
+        rgb_img = self.br.cv2_to_imgmsg(rgb_frame, encoding='bgr8')
+        rgb_img.header.stamp = now
+        rgb_img.header.frame_id = frame_id
+        msg.rgb_image = rgb_img
+        depth_img = Image()
+        depth_img.header.stamp = now
+        depth_img.header.frame_id = frame_id
+        depth_img.encoding = '16UC1'
+        msg.depth_image = depth_img
+        return msg
 
     def publish_frames(self):
         now = self.get_clock().now().to_msg()
 
-        # Camera 1 - A4ech
-        ret1, frame1 = self.cap1.read()
-        if ret1:
-            rgb1 = self.br.cv2_to_imgmsg(frame1, encoding='bgr8')
-            rgb1.header.stamp = now
-            rgb1.header.frame_id = 'a4ech_frame'
+        # OD Camera
+        with self.od_lock:
+            od_frame = self.od_frame.copy() if self.od_frame is not None else None
+        if od_frame is not None:
+            self.publisher_od.publish(self.make_camera_data(od_frame, 'od_frame', now))
+            self.get_logger().info('OD frame published', once=True)
 
-            depth1 = Image()
-            depth1.header.stamp = now
-            depth1.header.frame_id = 'a4ech_frame'
-            depth1.encoding = '16UC1'
-
-            msg1 = CameraData()
-            msg1.rgb_image = rgb1
-            msg1.depth_image = depth1
-
-            self.publisher1.publish(msg1)
-            cv2.imshow('A4ech Camera', frame1)
-
-        # Camera 2 - Webcam
-        ret2, frame2 = self.cap2.read()
-        if ret2:
-            rgb2 = self.br.cv2_to_imgmsg(frame2, encoding='bgr8')
-            rgb2.header.stamp = now
-            rgb2.header.frame_id = 'webcam_frame'
-
-            depth2 = Image()
-            depth2.header.stamp = now
-            depth2.header.frame_id = 'webcam_frame'
-            depth2.encoding = '16UC1'
-
-            msg2 = CameraData()
-            msg2.rgb_image = rgb2
-            msg2.depth_image = depth2
-
-            self.publisher2.publish(msg2)
-            cv2.imshow('Web Camera', frame2)
-
-        cv2.waitKey(1)
+        # OCR Camera
+        with self.ocr_lock:
+            ocr_frame = self.ocr_frame.copy() if self.ocr_frame is not None else None
+        if ocr_frame is not None:
+            self.publisher_ocr.publish(self.make_camera_data(ocr_frame, 'ocr_frame', now))
+            self.get_logger().info('OCR frame published', once=True)
 
     def destroy_node(self):
-        self.cap1.release()
-        self.cap2.release()
-        cv2.destroyAllWindows()
         super().destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WebcamNode()
+    node = CameraNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

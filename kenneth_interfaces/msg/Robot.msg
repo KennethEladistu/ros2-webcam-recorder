@@ -1,0 +1,11 @@
+string arm_version
+string arm_state
+bool arm_is_moving
+string arm_cmd_count
+string arm_error_and_warn
+string arm_position_radian
+string arm_position
+string arm_servo_angle_radian
+string arm_servo_angle
+string arm_axis_angle_pose_radian
+string arm_axis_angle_pose
